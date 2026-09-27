@@ -20,6 +20,7 @@ import { PlusOutlined } from '@ant-design/icons';
 import { usePlotStore } from '../stores/plotStore';
 import { useRegenStore } from '../stores/regenStore';
 import RoundTag from '../components/common/RoundTag';
+import { PLOT_LOCKED_HINT, PlotLockedError } from '../utils/db';
 import {
   AGE_GROUPS,
   BROWSE_DAMAGES,
@@ -111,7 +112,25 @@ export default function RegenView() {
       title: '操作',
       width: 90,
       render: (_: unknown, row: RegenShrub) => (
-        <Button size="small" danger onClick={() => removeRegen(row.id)}>
+        <Button
+          size="small"
+          danger
+          onClick={async () => {
+            if (plot?.locked) {
+              setError(PLOT_LOCKED_HINT);
+              return;
+            }
+            try {
+              await removeRegen(row.id);
+            } catch (e) {
+              if (e instanceof PlotLockedError) {
+                setError(PLOT_LOCKED_HINT);
+                return;
+              }
+              throw e;
+            }
+          }}
+        >
           删除
         </Button>
       ),
@@ -149,6 +168,13 @@ export default function RegenView() {
 
       {toast ? <Alert type="success" showIcon message={toast} closable onClose={() => setToast('')} /> : null}
       {error ? <Alert type="error" showIcon message={error} closable onClose={() => setError('')} /> : null}
+      {plot.locked ? (
+        <Alert
+          type="warning"
+          showIcon
+          message={`第 ${plot.surveyRound} 期已归档锁定：更新层记录的登记与移除已停用，当前数据仅供查看；如需调整请先在台账页解锁往期。`}
+        />
+      ) : null}
 
       <Card size="small" title="登记样方记录">
         <Space wrap size={8}>
@@ -206,11 +232,23 @@ export default function RegenView() {
             type="primary"
             icon={<PlusOutlined />}
             onClick={async () => {
+              if (plot.locked) {
+                setError(PLOT_LOCKED_HINT);
+                return;
+              }
               if (!form.species.trim()) {
                 setError('种类必填');
                 return;
               }
-              await addRegen({ ...form, species: form.species.trim() });
+              try {
+                await addRegen({ ...form, species: form.species.trim() });
+              } catch (e) {
+                if (e instanceof PlotLockedError) {
+                  setError(PLOT_LOCKED_HINT);
+                  return;
+                }
+                throw e;
+              }
               setError('');
               setToast(`已登记 ${form.layer} · ${form.species.trim()}（${form.count} 株）`);
               setForm({ ...form, species: '' });

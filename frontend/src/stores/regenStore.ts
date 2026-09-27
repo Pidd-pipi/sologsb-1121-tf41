@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { db } from '../utils/db';
+import { assertPlotWritable, db } from '../utils/db';
 import { newId } from '../utils/id';
 import type { RegenShrub, RegenShrubDraft } from '../types/regen';
 
@@ -22,16 +22,21 @@ export const useRegenStore = create<RegenState>((set, get) => ({
     set({ items: rows, loaded: true });
   },
   async add(draft) {
+    await assertPlotWritable(draft.plotId);
     const record: RegenShrub = { ...draft, id: newId('regen') };
     await db.regens.put(record);
     set({ items: [...get().items, record] });
     return record;
   },
   async update(id, patch) {
+    const existing = get().items.find((it) => it.id === id) ?? (await db.regens.get(id));
+    if (existing) await assertPlotWritable(existing.plotId);
     await db.regens.update(id, patch);
     set({ items: get().items.map((it) => (it.id === id ? { ...it, ...patch } : it)) });
   },
   async remove(id) {
+    const existing = get().items.find((it) => it.id === id) ?? (await db.regens.get(id));
+    if (existing) await assertPlotWritable(existing.plotId);
     await db.regens.delete(id);
     set({ items: get().items.filter((it) => it.id !== id) });
   },

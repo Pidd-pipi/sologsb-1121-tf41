@@ -22,6 +22,7 @@ import { useTreeStore } from '../stores/treeStore';
 import { useTreeStats } from '../hooks/useTreeStats';
 import TreeTable from '../components/common/TreeTable';
 import RoundTag from '../components/common/RoundTag';
+import { PLOT_LOCKED_HINT, PlotLockedError } from '../utils/db';
 import {
   HEALTH_CLASSES,
   TREE_ORIGINS,
@@ -89,6 +90,10 @@ export default function TreeEntry() {
   );
 
   const submit = async () => {
+    if (plot?.locked) {
+      setError(PLOT_LOCKED_HINT);
+      return;
+    }
     if (!form.treeNo.trim()) {
       setError('树号必填');
       return;
@@ -101,7 +106,15 @@ export default function TreeEntry() {
       setError(`第 ${round} 期已存在树号 ${form.treeNo.trim()}`);
       return;
     }
-    await addTree({ ...form, treeNo: form.treeNo.trim(), species: form.species.trim(), round });
+    try {
+      await addTree({ ...form, treeNo: form.treeNo.trim(), species: form.species.trim(), round });
+    } catch (e) {
+      if (e instanceof PlotLockedError) {
+        setError(PLOT_LOCKED_HINT);
+        return;
+      }
+      throw e;
+    }
     setError('');
     setToast(`已录入第 ${round} 期样木 ${form.treeNo.trim()}（${diameterClassLabel(form.dbhCm)} cm 径阶）`);
     setForm({ ...form, treeNo: '', dbhCm: 10, heightM: 8, remark: '' });
@@ -171,6 +184,13 @@ export default function TreeEntry() {
 
       {toast ? <Alert type="success" showIcon message={toast} closable onClose={() => setToast('')} /> : null}
       {error ? <Alert type="error" showIcon message={error} closable onClose={() => setError('')} /> : null}
+      {plot.locked ? (
+        <Alert
+          type="warning"
+          showIcon
+          message={`第 ${plot.surveyRound} 期已归档锁定：样木新增与胸径修改已停用，当前数据仅供查看；如需调整请先在台账页解锁往期。`}
+        />
+      ) : null}
 
       <Row gutter={12}>
         <Col span={12}>
@@ -317,7 +337,19 @@ export default function TreeEntry() {
           items={rows}
           peers={peers}
           onDbhChange={async (treeId, dbhCm) => {
-            await updateTree(treeId, { dbhCm });
+            if (plot.locked) {
+              setError(PLOT_LOCKED_HINT);
+              return;
+            }
+            try {
+              await updateTree(treeId, { dbhCm });
+            } catch (e) {
+              if (e instanceof PlotLockedError) {
+                setError(PLOT_LOCKED_HINT);
+                return;
+              }
+              throw e;
+            }
             setToast('胸径已更新，径阶与断面积同步重算');
           }}
         />

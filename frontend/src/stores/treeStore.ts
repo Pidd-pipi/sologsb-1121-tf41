@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { db } from '../utils/db';
+import { assertPlotWritable, db } from '../utils/db';
 import { newId } from '../utils/id';
 import type { TreeRecord, TreeRecordDraft } from '../types/tree';
 
@@ -23,12 +23,17 @@ export const useTreeStore = create<TreeState>((set, get) => ({
     set({ items: rows, loaded: true });
   },
   async add(draft) {
+    await assertPlotWritable(draft.plotId);
     const record: TreeRecord = { ...draft, id: newId('tree'), measuredAt: Date.now() };
     await db.trees.put(record);
     set({ items: [...get().items, record] });
     return record;
   },
   async addMany(drafts) {
+    const plotIds = Array.from(new Set(drafts.map((d) => d.plotId)));
+    for (const plotId of plotIds) {
+      await assertPlotWritable(plotId);
+    }
     const records: TreeRecord[] = drafts.map((d) => ({
       ...d,
       id: newId('tree'),
@@ -39,10 +44,14 @@ export const useTreeStore = create<TreeState>((set, get) => ({
     return records;
   },
   async update(id, patch) {
+    const existing = get().items.find((it) => it.id === id) ?? (await db.trees.get(id));
+    if (existing) await assertPlotWritable(existing.plotId);
     await db.trees.update(id, patch);
     set({ items: get().items.map((it) => (it.id === id ? { ...it, ...patch } : it)) });
   },
   async remove(id) {
+    const existing = get().items.find((it) => it.id === id) ?? (await db.trees.get(id));
+    if (existing) await assertPlotWritable(existing.plotId);
     await db.trees.delete(id);
     set({ items: get().items.filter((it) => it.id !== id) });
   },

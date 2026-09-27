@@ -51,6 +51,28 @@ class ForestPlotDB extends Dexie {
 
 export const db = new ForestPlotDB();
 
+/** 锁定样地的统一提示语：页面入口与底层写入拦截共用 */
+export const PLOT_LOCKED_HINT = '样地已锁定，请先在台账页「解锁往期」后再写入';
+
+/** 样地锁定（往期已归档）时写入被拒绝的错误 */
+export class PlotLockedError extends Error {
+  readonly plotId: string;
+  constructor(plotId: string) {
+    super(PLOT_LOCKED_HINT);
+    this.name = 'PlotLockedError';
+    this.plotId = plotId;
+  }
+}
+
+/**
+ * 写入前校验：样地锁定则抛出 PlotLockedError。
+ * 各 store 的写操作与复查比对保存都经过这里，绕过页面的直接调用同样被拦截。
+ */
+export async function assertPlotWritable(plotId: string): Promise<void> {
+  const plot = await db.plots.get(plotId);
+  if (plot?.locked) throw new PlotLockedError(plotId);
+}
+
 export function markDbVersion(): void {
   try {
     window.localStorage.setItem(LS_VERSION_KEY, String(DB_VERSION));
@@ -69,6 +91,10 @@ export function readDbVersion(): number {
 }
 
 export async function saveRecheckDiffs(diffs: RecheckDiff[]): Promise<void> {
+  const plotIds = Array.from(new Set(diffs.map((d) => d.plotId)));
+  for (const plotId of plotIds) {
+    await assertPlotWritable(plotId);
+  }
   await db.rechecks.bulkPut(diffs);
 }
 
