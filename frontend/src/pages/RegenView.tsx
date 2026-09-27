@@ -33,6 +33,7 @@ import {
 } from '../types/regen';
 import { heightClassStats } from '../utils/forestCalc';
 import { perHectareCount } from '../utils/forestCalc';
+import { PLOT_LOCKED_MESSAGE } from '../utils/plotLock';
 
 type Columns = NonNullable<TableProps<RegenShrub>['columns']>;
 
@@ -77,6 +78,7 @@ export default function RegenView() {
   const filtered = rows.filter((r) => layerFilter === 'all' || r.layer === layerFilter);
   const heightStats = heightClassStats(filtered);
   const totalCount = filtered.reduce((s, r) => s + r.count, 0);
+  const locked = plot?.locked ?? false;
 
   const columns: Columns = [
     {
@@ -111,7 +113,22 @@ export default function RegenView() {
       title: '操作',
       width: 90,
       render: (_: unknown, row: RegenShrub) => (
-        <Button size="small" danger onClick={() => removeRegen(row.id)}>
+        <Button
+          size="small"
+          danger
+          disabled={locked}
+          onClick={async () => {
+            if (locked) {
+              setError(PLOT_LOCKED_MESSAGE);
+              return;
+            }
+            try {
+              await removeRegen(row.id);
+            } catch (e) {
+              setError(e instanceof Error ? e.message : '删除失败');
+            }
+          }}
+        >
           删除
         </Button>
       ),
@@ -149,6 +166,7 @@ export default function RegenView() {
 
       {toast ? <Alert type="success" showIcon message={toast} closable onClose={() => setToast('')} /> : null}
       {error ? <Alert type="error" showIcon message={error} closable onClose={() => setError('')} /> : null}
+      {locked ? <Alert type="warning" showIcon message={PLOT_LOCKED_MESSAGE} /> : null}
 
       <Card size="small" title="登记样方记录">
         <Space wrap size={8}>
@@ -205,12 +223,22 @@ export default function RegenView() {
           <Button
             type="primary"
             icon={<PlusOutlined />}
+            disabled={locked}
             onClick={async () => {
+              if (locked) {
+                setError(PLOT_LOCKED_MESSAGE);
+                return;
+              }
               if (!form.species.trim()) {
                 setError('种类必填');
                 return;
               }
-              await addRegen({ ...form, species: form.species.trim() });
+              try {
+                await addRegen({ ...form, species: form.species.trim() });
+              } catch (e) {
+                setError(e instanceof Error ? e.message : '样方记录保存失败');
+                return;
+              }
               setError('');
               setToast(`已登记 ${form.layer} · ${form.species.trim()}（${form.count} 株）`);
               setForm({ ...form, species: '' });

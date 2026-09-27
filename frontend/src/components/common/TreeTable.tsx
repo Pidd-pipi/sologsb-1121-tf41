@@ -10,6 +10,8 @@ export interface TreeTableProps {
   peers?: TreeRecord[];
   /** 行内改胸径 */
   onDbhChange?: (id: string, dbhCm: number) => void;
+  /** 锁定归档时禁用胸径行内编辑（仍显示当前数值） */
+  dbhDisabled?: boolean;
   /** 是否展示径阶分组统计 */
   showClassSummary?: boolean;
   emptyText?: string;
@@ -22,6 +24,7 @@ export default function TreeTable({
   items,
   peers,
   onDbhChange,
+  dbhDisabled = false,
   showClassSummary = true,
   emptyText = '暂无样木记录',
 }: TreeTableProps) {
@@ -56,6 +59,7 @@ export default function TreeTable({
                 max={200}
                 step={0.1}
                 value={row.dbhCm}
+                disabled={dbhDisabled}
                 status={abnormal ? 'warning' : undefined}
                 onChange={(v) => onDbhChange(row.id, Number(v ?? 0))}
                 style={{ width: 96 }}

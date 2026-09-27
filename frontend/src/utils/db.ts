@@ -4,6 +4,7 @@ import type { TreeRecord } from '../types/tree';
 import type { RegenShrub } from '../types/regen';
 import type { RecheckDiff } from '../types/recheck';
 import { newId } from './id';
+import { assertPlotWritable } from './plotLock';
 
 export const DB_NAME = 'gbforestplot';
 export const DB_VERSION = 2;
@@ -69,6 +70,8 @@ export function readDbVersion(): number {
 }
 
 export async function saveRecheckDiffs(diffs: RecheckDiff[]): Promise<void> {
+  const plotId = diffs[0]?.plotId;
+  if (plotId) assertPlotWritable(await db.plots.get(plotId));
   await db.rechecks.bulkPut(diffs);
 }
 

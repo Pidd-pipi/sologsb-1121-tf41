@@ -7,6 +7,7 @@ import { useTreeStore } from '../stores/treeStore';
 import GrowthDiffTable from '../components/common/GrowthDiffTable';
 import RoundTag from '../components/common/RoundTag';
 import { loadRecheckDiffs, saveRecheckDiffs } from '../utils/db';
+import { PLOT_LOCKED_MESSAGE } from '../utils/plotLock';
 import { newId } from '../utils/id';
 import { growthRate, isDiffAbnormal, type RecheckDiff } from '../types/recheck';
 import type { TreeRecord } from '../types/tree';
@@ -103,11 +104,20 @@ export default function RecheckView() {
   };
 
   const save = async () => {
+    if (plot?.locked) {
+      setError(PLOT_LOCKED_MESSAGE);
+      return;
+    }
     if (diffs.length === 0) {
       setError('请先生成比对表');
       return;
     }
-    await saveRecheckDiffs(diffs);
+    try {
+      await saveRecheckDiffs(diffs);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '比对结果保存失败');
+      return;
+    }
     setToast(`逐株比对表已写入本地档案库（${diffs.length} 条）`);
   };
 
@@ -152,6 +162,7 @@ export default function RecheckView() {
 
       {toast ? <Alert type="success" showIcon message={toast} closable onClose={() => setToast('')} /> : null}
       {error ? <Alert type="error" showIcon message={error} closable onClose={() => setError('')} /> : null}
+      {plot.locked ? <Alert type="warning" showIcon message={PLOT_LOCKED_MESSAGE} /> : null}
 
       <Card size="small">
         <Space wrap size={10}>
@@ -176,7 +187,7 @@ export default function RecheckView() {
           <Button type="primary" onClick={generate}>
             生成逐株比对表
           </Button>
-          <Button icon={<SaveOutlined />} onClick={save}>
+          <Button icon={<SaveOutlined />} disabled={plot.locked} onClick={save}>
             保存比对结果
           </Button>
           <Typography.Text type="secondary">

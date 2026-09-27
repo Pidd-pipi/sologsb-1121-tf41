@@ -31,6 +31,7 @@ import {
   type TreeStatus,
 } from '../types/tree';
 import { diameterClassLabel } from '../utils/forestCalc';
+import { PLOT_LOCKED_MESSAGE } from '../utils/plotLock';
 
 const SPECIES_POOL = ['红松', '紫椴', '蒙古栎', '色木槭', '水曲柳', '胡桃楸', '云杉', '白桦'];
 
@@ -53,6 +54,7 @@ export default function TreeEntry() {
 
   const stats = useTreeStats(id, round);
   const peers = trees.filter((t) => t.plotId === id);
+  const locked = plot?.locked ?? false;
 
   const [speciesFilter, setSpeciesFilter] = useState('all');
   const [form, setForm] = useState<TreeRecordDraft>({
@@ -89,6 +91,10 @@ export default function TreeEntry() {
   );
 
   const submit = async () => {
+    if (locked) {
+      setError(PLOT_LOCKED_MESSAGE);
+      return;
+    }
     if (!form.treeNo.trim()) {
       setError('树号必填');
       return;
@@ -101,7 +107,12 @@ export default function TreeEntry() {
       setError(`第 ${round} 期已存在树号 ${form.treeNo.trim()}`);
       return;
     }
-    await addTree({ ...form, treeNo: form.treeNo.trim(), species: form.species.trim(), round });
+    try {
+      await addTree({ ...form, treeNo: form.treeNo.trim(), species: form.species.trim(), round });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '样木保存失败');
+      return;
+    }
     setError('');
     setToast(`已录入第 ${round} 期样木 ${form.treeNo.trim()}（${diameterClassLabel(form.dbhCm)} cm 径阶）`);
     setForm({ ...form, treeNo: '', dbhCm: 10, heightM: 8, remark: '' });
@@ -171,6 +182,7 @@ export default function TreeEntry() {
 
       {toast ? <Alert type="success" showIcon message={toast} closable onClose={() => setToast('')} /> : null}
       {error ? <Alert type="error" showIcon message={error} closable onClose={() => setError('')} /> : null}
+      {locked ? <Alert type="warning" showIcon message={PLOT_LOCKED_MESSAGE} /> : null}
 
       <Row gutter={12}>
         <Col span={12}>
@@ -268,7 +280,7 @@ export default function TreeEntry() {
                 value={form.remark}
                 onChange={(e) => setForm({ ...form, remark: e.target.value })}
               />
-              <Button type="primary" icon={<PlusOutlined />} onClick={submit}>
+              <Button type="primary" icon={<PlusOutlined />} disabled={locked} onClick={submit}>
                 录入样木
               </Button>
             </Space>
@@ -316,9 +328,18 @@ export default function TreeEntry() {
         <TreeTable
           items={rows}
           peers={peers}
+          dbhDisabled={locked}
           onDbhChange={async (treeId, dbhCm) => {
-            await updateTree(treeId, { dbhCm });
-            setToast('胸径已更新，径阶与断面积同步重算');
+            if (locked) {
+              setError(PLOT_LOCKED_MESSAGE);
+              return;
+            }
+            try {
+              await updateTree(treeId, { dbhCm });
+              setToast('胸径已更新，径阶与断面积同步重算');
+            } catch (e) {
+              setError(e instanceof Error ? e.message : '胸径保存失败');
+            }
           }}
         />
       </Card>
